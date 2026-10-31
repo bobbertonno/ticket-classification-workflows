@@ -55,5 +55,77 @@ pnpm typecheck
 pnpm build
 ```
 
+## Running on a local machine
+
+### Prerequisites
+- **Node.js 20.9 or later** (required by Next.js 16). Check with `node -v`.
+- **pnpm**, the version pinned in `package.json` (`packageManager`). The easiest way to get it is Corepack, which ships with Node.js: `corepack enable`.
+- **Git**.
+- Optional: a **MongoDB Atlas** cluster and a **Voyage AI** API key, for real persistence and semantic classification. Without them, the app runs in the fully simulated mode.
+
+### 1. Clone and install
+```bash
+git clone https://github.com/bobbertonno/ticket-classification-workflows.git
+cd ticket-classification-workflows
+corepack enable
+pnpm install
+```
+
+### 2. Configure environment variables
+Create a `.env.local` file in the project root. Next.js loads it automatically, and it is git-ignored, so never commit it.
+
+```bash
+# Required: signs the session cookie and encrypts saved environments (≥32 characters)
+SESSION_SECRET=<output of: openssl rand -base64 32>
+
+# Needed to save Atlas/Voyage credentials from the Setup Wizard
+SECRETS_ENCRYPTION_KEY=<output of: openssl rand -base64 32>
+
+# Optional: development data plane (skip to use the in-memory simulation)
+# MONGODB_URI=mongodb+srv://<user>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority
+# MONGODB_DB=automation_control_center
+
+# Optional: external Voyage AI
+# VOYAGE_API_KEY=<your Voyage AI key>
+# VOYAGE_MODEL=voyage-4
+
+# Optional, local development only: allow a non-Atlas MongoDB (for example a local mongod)
+# ALLOW_NON_ATLAS_MONGODB=true
+```
+
+If you don't have `openssl`, any random string of at least 32 characters works, for example the output of `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`.
+
+Changing `SESSION_SECRET` invalidates existing sessions and every environment saved in the browser.
+
+### 3. Start the app
+```bash
+pnpm dev
+```
+Open [http://localhost:3000](http://localhost:3000). To use another port, run `pnpm dev -- -p 3001`.
+
+To run a production build locally instead:
+```bash
+pnpm build
+pnpm start
+```
+
+### 4. Connect Atlas (optional)
+1. In Atlas, go to **Network Access** and add your machine's public IP (or a temporary `0.0.0.0/0` for a quick demo).
+2. Create a database user with `readWrite` on the demo database only.
+3. In the app, open **Settings & Integrations → Setup Wizard**, then follow the steps in [Atlas setup](#atlas-setup).
+
+### 5. Verify
+```bash
+pnpm typecheck
+pnpm test
+```
+
+### Troubleshooting
+- **`ENV_NOT_FOUND` after saving an environment:** check that `SESSION_SECRET` is set, then restart `pnpm dev` after editing `.env.local`.
+- **Connection rejected:** only `mongodb+srv` hosts on `mongodb.net` are accepted unless `ALLOW_NON_ATLAS_MONGODB=true` is set. Private and loopback IPs are blocked by the SSRF guard.
+- **Atlas timeout:** your IP is missing from the Atlas access list, or a corporate proxy or VPN is blocking port 27017.
+- **"Simulated deterministic classifier" banner:** you're looking at a pre-loaded historical ticket, or embeddings or the vector index aren't ready yet. Publish a new event from the Kafka Simulator.
+- **Port 3000 already in use:** start on another port with `pnpm dev -- -p 3001`.
+
 ## Deploying to Vercel
 Import the repository (or use **Publish** in v0). Set `SESSION_SECRET` and, if needed, `SECRETS_ENCRYPTION_KEY` and `CONTROL_PLANE_MONGODB_URI`. Security headers are in `next.config.mjs`. CSP is in report-only mode until you tighten it.
